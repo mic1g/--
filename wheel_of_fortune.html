@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>卜卦 - Wheel of Fortune</title>
+<style>
+  body {
+    text-align: center;
+    font-family: "Microsoft YaHei", sans-serif;
+    background-color: #f5f5f5;
+  }
+  #wheelcanvas {
+    margin-top: 20px;
+    border: 2px solid #000;
+    border-radius: 50%;
+    background-color: #fff;
+  }
+  #spinButton {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 18px;
+    cursor: pointer;
+  }
+  #result {
+    display: none;
+    position: fixed;
+    top: 20%;
+    left: 25%;
+    width: 50%;
+    background-color: white;
+    border: 2px solid black;
+    padding: 20px;
+    z-index: 1000;
+  }
+  #closeButton {
+    margin-top: 10px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  #overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    display: none;
+    z-index: 999;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="wheelcanvas" width="500" height="500"></canvas>
+<br>
+<button id="spinButton">卜卦</button>
+
+<div id="overlay"></div>
+
+<div id="result">
+  <h2 id="resultTitle"></h2>
+  <p id="resultContent"></p>
+  <button id="closeButton">关闭</button>
+</div>
+
+<script>
+const canvas = document.getElementById('wheelcanvas');
+const ctx = canvas.getContext('2d');
+const centerX = canvas.width / 2;
+const centerY = canvas.height / 2;
+const radius = canvas.width / 2 - 20;
+
+let startAngle = 0;
+let isSpinning = false;
+let spinTime = 0;
+let spinTimeTotal = 0;
+let spinAngleStart = 0;
+
+const items = [
+  {
+    title: "乾为天（乾卦）",
+    content: "卦象：天行健，君子以自强不息。\n交易解读：市场处于强势上升趋势，应积极把握机会，勇于进取，但也要保持谨慎，不可过度乐观。"
+  },
+  {
+    title: "坤为地（坤卦）",
+    content: "卦象：地势坤，君子以厚德载物。\n交易解读：市场稳健但缺乏动能，适合稳健投资者耐心布局，不宜急于求成。"
+  },
+  {
+    title: "水雷屯（屯卦）",
+    content: "卦象：云雷屯，君子以经纶。\n交易解读：市场初现机会，但前景不明朗，需要谨慎观察，准备充足后再行动。"
+  },
+  {
+    title: "山水蒙（蒙卦）",
+    content: "卦象：山下出泉，蒙。君子以果行育德。\n交易解读：市场信息混乱，难以判断方向，应加强学习，避免盲目操作。"
+  },
+  {
+    title: "水天需（需卦）",
+    content: "卦象：云上于天，需。君子以饮食宴乐。\n交易解读：市场等待时机，资金观望，适合持币观望，耐心等待机会出现。"
+  },
+  {
+    title: "天水讼（讼卦）",
+    content: "卦象：天与水违行，讼。君子以作事谋始。\n交易解读：市场存在分歧，行情波动较大，应谨慎操作，防范风险。"
+  },
+  {
+    title: "地水师（师卦）",
+    content: "卦象：地中有水，师。君子以容民畜众。\n交易解读：市场进入调整阶段，需要战略布局，谨慎管理资金。"
+  },
+  {
+    title: "水地比（比卦）",
+    content: "卦象：水在地上，比。君子以建亲仁。\n交易解读：市场参与者增加，资金涌入，可考虑顺势而为，但需警惕过热风险。"
+  },
+  {
+    title: "风天小畜（小畜卦）",
+    content: "卦象：风行天上，小畜。君子以懿文德。\n交易解读：市场有小幅上涨，适合小仓位操作，积少成多，不宜贪多。"
+  },
+  {
+    title: "天泽履（履卦）",
+    content: "卦象：上天下泽，履。君子以辨上下，定民志。\n交易解读：市场有风险迹象，需谨慎行事，如履薄冰，防范潜在的下跌。"
+  },
+  {
+    title: "地天泰（泰卦）",
+    content: "卦象：天地交泰，君子以厚德载物。\n交易解读：市场处于牛市初期，机遇良多，可积极参与，但也要注意风险管理。"
+  },
+  {
+    title: "天地否（否卦）",
+    content: "卦象：天地不交，否。君子以俭德辟难。\n交易解读：市场走势低迷，资金观望，宜保守操作，避免损失。"
+  },
+  {
+    title: "天火同人（同人卦）",
+    content: "卦象：天火同人，君子以类族辨物。\n交易解读：市场情绪高涨，参与者众多，可考虑顺势操作，但需保持理性。"
+  },
+  {
+    title: "火天大有（大有卦）",
+    content: "卦象：火在天上，大有。君子以遏恶扬善。\n交易解读：市场处于高点，收益丰厚，但要防范回调风险，适时止盈。"
+  },
+  {
+    title: "地山谦（谦卦）",
+    content: "卦象：地中有山，谦。君子以裒多益寡。\n交易解读：市场虽有机会，但需保持谦逊，不可冒进，稳健操作为宜。"
+  },
+  {
+    title: "雷地豫（豫卦）",
+    content: "卦象：雷出地奋，豫。君子以顺德，积小以高大。\n交易解读：市场有利好消息刺激，情绪乐观，可适当参与，但要注意节奏。"
+  },
+  {
+    title: "泽雷随（随卦）",
+    content: "卦象：泽中有雷，随。君子以向晦入宴息。\n交易解读：市场趋势明朗，可顺势而为，但不要盲目跟风，需有自己的判断。"
+  },
+  {
+    title: "山风蛊（蛊卦）",
+    content: "卦象：风行山上，蛊。君子以振民育德。\n交易解读：市场存在问题，需要修正策略，清理不良资产，调整持仓。"
+  },
+  {
+    title: "地泽临（临卦）",
+    content: "卦象：泽上有地，临。君子以教思无穷。\n交易解读：市场即将出现机会，可提前布局，密切关注行情变化。"
+  },
+  {
+    title: "风地观（观卦）",
+    content: "卦象：风行地上，观。先王以省方。\n交易解读：市场需冷静观察，切勿盲目行动，等待明确信号再进场。"
+  },
+  {
+    title: "火雷噬嗑（噬嗑卦）",
+    content: "卦象：雷电合而噬嗑。君子以明法。\n交易解读：市场存在突破机会，但有阻力，需要果断行动，突破瓶颈。"
+  },
+  {
+    title: "山火贲（贲卦）",
+    content: "卦象：山下有火，贲。君子以明庶政。\n交易解读：市场表面繁荣，需警惕虚假信号，注重基本面分析。"
+  },
+  {
+    title: "山地剥（剥卦）",
+    content: "卦象：山附于地，剥。君子以正命度人。\n交易解读：市场下跌趋势明显，应及时止损，保护本金。"
+  },
+  {
+    title: "地雷复（复卦）",
+    content: "卦象：雷在地中，复。君子以自省。\n交易解读：市场触底反弹，机会来临，可逐步建仓，但要控制风险。"
+  },
+  {
+    title: "天雷无妄（无妄卦）",
+    content: "卦象：天下有雷，无妄。君子以顺自然。\n交易解读：市场出现意外波动，不可盲目操作，应遵循市场规律。"
+  },
+  {
+    title: "山天大畜（大畜卦）",
+    content: "卦象：天在山中，大畜。君子以多识前言往行。\n交易解读：市场积累力量，尚未爆发，可耐心等待，做好准备。"
+  },
+  {
+    title: "山雷颐（颐卦）",
+    content: "卦象：山下有雷，颐。君子以慎言语，节饮食。\n交易解读：市场需要休养生息，投资者应谨慎，保持观望。"
+  },
+  {
+    title: "泽风大过（大过卦）",
+    content: "卦象：泽灭木，大过。君子以独立不惧。\n交易解读：市场波动剧烈，风险加大，应谨慎操作，避免重仓。"
+  },
+  {
+    title: "坎为水（坎卦）",
+    content: "卦象：水流不息，坎。君子以常德行。\n交易解读：市场波动频繁，存在陷阱，需谨慎行事，不宜冒险。"
+  },
+  {
+    title: "离为火（离卦）",
+    content: "卦象：火炎不息，离。君子以继明照世。\n交易解读：市场情绪高涨，行情火热，可积极参与，但要防范风险。"
+  },
+  {
+    title: "泽山咸（咸卦）",
+    content: "卦象：山上有泽，咸。君子以虚受人。\n交易解读：市场吸引力增强，资金流入，可考虑参与，但需审慎选择。"
+  },
+  {
+    title: "雷风恒（恒卦）",
+    content: "卦象：雷风相薄，恒。君子以立不易方。\n交易解读：市场趋势稳定，可长期持有，坚定信心。"
+  },
+  {
+    title: "天山遁（遁卦）",
+    content: "卦象：天下有山，遁。君子以远小人。\n交易解读：市场有回调迹象，适宜减仓，避开风险。"
+  },
+  {
+    title: "雷天大壮（大壮卦）",
+    content: "卦象：雷在天上，大壮。君子以非礼勿履。\n交易解读：市场强势上涨，但需防范过度，理性看待行情。"
+  },
+  {
+    title: "火地晋（晋卦）",
+    content: "卦象：明出地上，晋。君子以自昭明德。\n交易解读：市场积极向上，前景光明，可把握机会，但不宜贪多。"
+  },
+  {
+    title: "地火明夷（明夷卦）",
+    content: "卦象：日落于地，明夷。君子以莅众。\n交易解读：市场受挫，下跌明显，应保护资金，避免损失。"
+  },
+  {
+    title: "风火家人（家人卦）",
+    content: "卦象：风自火出，家人。君子以言有物。\n交易解读：市场需要团队协作，信息共享，可参考专业意见。"
+  },
+  {
+    title: "火泽睽（睽卦）",
+    content: "卦象：离上兑下，睽。君子以同而异。\n交易解读：市场分歧加大，走势不明，需谨慎观察，不宜贸然进出。"
+  },
+  {
+    title: "水山蹇（蹇卦）",
+    content: "卦象：水洊至，蹇。君子以反身修德。\n交易解读：市场遇到阻力，前进困难，应暂缓操作，等待转机。"
+  },
+  {
+    title: "雷水解（解卦）",
+    content: "卦象：雷雨作，解。君子以赦过宥罪。\n交易解读：市场风险解除，行情好转，可适当参与。"
+  },
+  {
+    title: "山泽损（损卦）",
+    content: "卦象：山下有泽，损。君子以惩忿窒欲。\n交易解读：市场需要调整，适当减仓，控制风险。"
+  },
+  {
+    title: "风雷益（益卦）",
+    content: "卦象：风雷相薄，益。君子以见善则迁。\n交易解读：市场有利好，收益可期，可积极布局。"
+  },
+  {
+    title: "泽天夬（夬卦）",
+    content: "卦象：泽上于天，夬。君子以施禄。\n交易解读：市场有突破迹象，但需谨慎，防范假突破。"
+  },
+  {
+    title: "天风姤（姤卦）",
+    content: "卦象：天下有风，姤。后以施命诰四方。\n交易解读：市场出现意外机会，但不稳定，应谨慎参与。"
+  },
+  {
+    title: "泽地萃（萃卦）",
+    content: "卦象：泽上于地，萃。君子以除戎器。\n交易解读：市场资金聚集，人气旺盛，可顺势而为。"
+  },
+  {
+    title: "地风升（升卦）",
+    content: "卦象：地中生木，升。君子以顺德。\n交易解读：市场稳步上升，适合长期投资，稳健收益。"
+  },
+  {
+    title: "泽水困（困卦）",
+    content: "卦象：泽无水，困。君子以致命遂志。\n交易解读：市场陷入困境，资金匮乏，应谨慎，避免损失。"
+  },
+  {
+    title: "水风井（井卦）",
+    content: "卦象：木上有水，井。君子以劳民劝相。\n交易解读：市场基础稳固，可挖掘价值投资机会。"
+  },
+  {
+    title: "泽火革（革卦）",
+    content: "卦象：泽中有火，革。君子以治历明时。\n交易解读：市场变革来临，可能出现重大行情，需抓住机会。"
+  },
+  {
+    title: "火风鼎（鼎卦）",
+    content: "卦象：木上有火，鼎。君子以正位凝命。\n交易解读：市场结构调整，新的机会出现，可重新布局。"
+  },
+  {
+    title: "震为雷（震卦）",
+    content: "卦象：雷震百里，震。君子以恐惧修省。\n交易解读：市场波动加剧，需警惕风险，做好风险管理。"
+  },
+  {
+    title: "艮为山（艮卦）",
+    content: "卦象：兼山，艮。君子以思不出其位。\n交易解读：市场停滞不前，适宜观望，不宜盲目行动。"
+  },
+  {
+    title: "风山渐（渐卦）",
+    content: "卦象：山上有木，渐。君子以居贤德。\n交易解读：市场缓慢上升，适合稳健投资，循序渐进。"
+  },
+  {
+    title: "雷泽归妹（归妹卦）",
+    content: "卦象：泽上有雷，归妹。君子以永终知敝。\n交易解读：市场有短暂机会，但不可持久，应快进快出。"
+  },
+  {
+    title: "雷火丰（丰卦）",
+    content: "卦象：雷电皆至，丰。君子以折狱致刑。\n交易解读：市场行情火爆，收益可观，但需防范风险，谨慎操作。"
+  },
+  {
+    title: "火山旅（旅卦）",
+    content: "卦象：山上有火，旅。君子以明慎用刑。\n交易解读：市场不稳定，机会短暂，宜短线操作，不宜久留。"
+  },
+  {
+    title: "巽为风（巽卦）",
+    content: "卦象：随风巽，君子以申命行事。\n交易解读：市场变化不定，应灵活应对，顺势而为。"
+  },
+  {
+    title: "兑为泽（兑卦）",
+    content: "卦象：丽泽，兑。君子以朋友讲习。\n交易解读：市场情绪乐观，交易活跃，可适当参与。"
+  },
+  {
+    title: "风水涣（涣卦）",
+    content: "卦象：风行水上，涣。君子以立不易方。\n交易解读：市场资金涣散，行情不稳，应谨慎操作。"
+  },
+  {
+    title: "水泽节（节卦）",
+    content: "卦象：水在泽中，节。君子以制数度。\n交易解读：市场需要节制，控制仓位，避免过度交易。"
+  },
+  {
+    title: "风泽中孚（中孚卦）",
+    content: "卦象：泽上有风，中孚。君子以议狱缓死。\n交易解读：市场信心增强，可考虑增加投入，但需保持理性。"
+  },
+  {
+    title: "雷山小过（小过卦）",
+    content: "卦象：雷在山上，小过。君子以行过乎恭。\n交易解读：市场有小幅波动，不宜大举进出，适合小仓位操作。"
+  },
+  {
+    title: "水火既济（既济卦）",
+    content: "卦象：水火相济，既济。君子以思患而预防之。\n交易解读：市场达到阶段性高点，需防范回调，适时止盈。"
+  },
+  {
+    title: "火水未济（未济卦）",
+    content: "卦象：火在水上，未济。君子以慎辨物居方。\n交易解读：市场尚未明朗，趋势未定，应保持谨慎，等待机会。"
+  }
+];
+
+
+function drawWheel() {
+  const numSegments = items.length;
+  const anglePerSegment = 2 * Math.PI / numSegments;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.rotate(startAngle);
+
+  for (let i = 0; i < numSegments; i++) {
+    // Draw the segment
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, radius, i * anglePerSegment, (i + 1) * anglePerSegment, false);
+    ctx.closePath();
+
+    // Set the fill color
+    ctx.fillStyle = i % 2 === 0 ? '#FFCCCC' : '#CCCCFF';
+    ctx.fill();
+
+    // Draw the border
+    ctx.strokeStyle = '#000000';
+    ctx.stroke();
+
+    // Draw the text along the arc
+    ctx.save();
+    ctx.rotate(i * anglePerSegment + anglePerSegment / 2);
+    ctx.translate(radius - 10, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.fillStyle = "black";
+    ctx.font = `${Math.min(14, (2 * Math.PI * radius / numSegments) / 2)}px Microsoft YaHei`;
+    ctx.fillText(items[i].title, 0, 0);
+    ctx.restore();
+  }
+
+  ctx.restore();
+
+  // Draw the arrow
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.moveTo(centerX - 10, centerY - radius - 20);
+  ctx.lineTo(centerX + 10, centerY - radius - 20);
+  ctx.lineTo(centerX, centerY - radius);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function spin() {
+  spinAngleStart = Math.random() * 10 + 10;
+  spinTime = 0;
+  spinTimeTotal = Math.random() * 3000 + 4000;
+  isSpinning = true;
+  rotateWheel();
+}
+
+function rotateWheel() {
+  spinTime += 30;
+  if (spinTime >= spinTimeTotal) {
+    stopRotateWheel();
+    return;
+  }
+  const spinAngle = spinAngleStart - easeOut(spinTime, 0, spinAngleStart, spinTimeTotal);
+  startAngle += (spinAngle * Math.PI / 180);
+  drawWheel();
+  requestAnimationFrame(rotateWheel);
+}
+
+function easeOut(t, b, c, d) {
+  const ts = (t/=d)*t;
+  const tc = ts*t;
+  return b+c*(tc + -3*ts + 3*t);
+}
+
+function stopRotateWheel() {
+  isSpinning = false;
+  const degrees = startAngle * 180 / Math.PI % 360;
+  const arcd = 360 / items.length;
+  const index = Math.floor((360 - degrees % 360) / arcd) % items.length;
+  const selectedItem = items[index];
+
+  // Show the result
+  document.getElementById('resultTitle').innerText = selectedItem.title;
+  document.getElementById('resultContent').innerText = selectedItem.content;
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('overlay').style.display = 'block';
+}
+
+document.getElementById('spinButton').addEventListener('click', function() {
+  if (isSpinning) return;
+  spin();
+});
+
+document.getElementById('closeButton').addEventListener('click', function() {
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('overlay').style.display = 'none';
+});
+
+drawWheel();
+</script>
+
+</body>
+</html>
